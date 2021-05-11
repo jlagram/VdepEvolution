@@ -18,7 +18,7 @@ class HamburgModelFactory {
   public:
     HamburgModelFactory(){
 
-        periodeInDays = 1;
+        periodInDays = 1;
         debug=true;
         
         // files
@@ -50,7 +50,7 @@ class HamburgModelFactory {
     // data members
     // -------------
     
-    Int_t periodeInDays;
+    Int_t periodInDays;
     Bool_t debug;
 
     // for input tree reading

@@ -63,24 +63,25 @@ void HamburgModelFactory::readLumiTempScenario(std::string filename="realistic_s
     
     Int_t step, stepInYear;
     Float_t sqrtS, lumi;
-    Double_t temperature;
+    Float_t temperature, LVfraction, HVfraction;
     std::string def, var;
     
     std::ifstream lumifile;
     std::string line;
     lumifile.open(filename.c_str());
     if (lumifile.is_open()) {
+        std::cout<<"Reading file : "<<filename<<std::endl;
         while ( getline (lumifile,line) )
         {
             std::istringstream iss(line);
-            if (!(iss >> step >> stepInYear >> sqrtS >> lumi >> temperature)) {
+            if (!(iss >> step >> stepInYear >> sqrtS >> lumi >> temperature >> LVfraction >> HVfraction)) {
                 
                 // Check if a variable is set
                 std::istringstream iss2(line);
                 if((iss2 >> def >> var >> step) && def=="#define"){
                     std::cout<<" Defining: "<<var<<" : "<<step<<std::endl;
                     std::cout<<" ----------------------- "<<std::endl;
-                    if(var=="StepInDays") periodeInDays=step;
+                    if(var=="StepInDays") periodInDays=step;
                 }
                 else std::cout<<line<<std::endl;
                 continue;
@@ -89,14 +90,16 @@ void HamburgModelFactory::readLumiTempScenario(std::string filename="realistic_s
             SqrtS.push_back(sqrtS);
             Lumi.push_back(lumi);
             Temp.push_back(temperature);
-            if(lumi>0) Active.push_back(1);
+            if(lumi>0 or LVfraction>0.5) Active.push_back(1);
             else Active.push_back(0);
             nper++;
         }
         lumifile.close();
     }
+    else std::cerr<<"File '"<<filename<<"' not available."<<std::endl;
     
     Nperiods=nper;
+    std::cout<<" "<<Nperiods<<" periods found"<<std::endl;
     
     // initialize containers
     for(unsigned int i=0; i<Nperiods; i++){
@@ -199,14 +202,14 @@ void HamburgModelFactory::simulateSensorEvolution(int detid_){
         
         alpha1 = a10;
         alpha2 = I_a2(Temp_evol[i]);
-        alpha3 = I_a3(1,periodeInDays);
+        alpha3 = I_a3(1,periodInDays);
         
         // annealing
         // update leak current in future and consequent temperature increase
         for(Int_t j=i; j<Nperiods; j++){  ///// DEPART DE I OU I+1 ???????????????????????
-            alpha1 *= I_a1(Temp_evol[j], periodeInDays);
+            alpha1 *= I_a1(Temp_evol[j], periodInDays);
             if(I_a2(Temp_evol[j])<alpha2) alpha2 = I_a2(Temp_evol[j]);  /// POURQUOI PAS UPDATE QUAND > alpha2 ????
-            alpha3 = I_a3(j-i+1, periodeInDays);
+            alpha3 = I_a3(j-i+1, periodInDays);
             delIleak = (alpha1+alpha2+alpha3)*Feq[i]*volume*1000;
             
             //std::cout<<" "<<j<<" "<<alpha1<<" "<<alpha2<<" "<<alpha3<<std::endl;
@@ -229,7 +232,8 @@ void HamburgModelFactory::simulateSensorEvolution(int detid_){
             
         }
         //std::cout<<i<<" "<<I_leak[i]<<std::endl;
-        if(!Active[i]) I_leak[i]=0;
+        //if(!Active[i]) I_leak[i]=0;
+        if(!SqrtS[i]) I_leak[i]=0;
         
         // VDEP
         
@@ -238,9 +242,9 @@ void HamburgModelFactory::simulateSensorEvolution(int detid_){
         NY_temp = 1;
         // annealing
         for(Int_t j=i; j<Nperiods; j++){
-            Na_temp = N_short(1., Temp_evol[j], Na_temp, periodeInDays);
+            Na_temp = N_short(1., Temp_evol[j], Na_temp, periodInDays);
             Na[j] += -Na_temp;
-            NY_temp *= N_reverse2(1., Temp_evol[j], periodeInDays);
+            NY_temp *= N_reverse2(1., Temp_evol[j], periodInDays);
             NY[j] += -gY * Feq[i] *(1.-NY_temp);
         }
         //std::cout<<i<<" "<<Neff0<<" "<<Nc[i]<<" "<<Na[i]<<" "<<NY[i]<<std::endl;
@@ -270,14 +274,14 @@ void HamburgModelFactory::drawSaveSensorSimu(bool print_plots=false){
     // Module temperature & Ileak
     TH1D * h_T = new TH1D("h_T","Module Temperature",maxTime,0.5, maxTime+0.5);
     TH1D * h_I_leak = new TH1D("I_leak","Leakage Current (not corrected)", maxTime,0.5, maxTime+0.5);
-    TH1D * h_I_leak_corr = new TH1D("I_leak_corr","Leakage Current", maxTime,0.5, periodeInDays*24.*60.*60.*maxTime+0.5);
+    TH1D * h_I_leak_corr = new TH1D("I_leak_corr","Leakage Current", maxTime,0.5, periodInDays*24.*60.*60.*maxTime+0.5);
     
     // Vdep related plots
     TH1D * h_Nc = new TH1D("Nc","Stable Damage",maxTime,0.5,maxTime+0.5);
     TH1D * h_Na = new TH1D("Na","Short Term Annealing",maxTime,0.5,maxTime+0.5);
     TH1D * h_NY = new TH1D("NY","Reverse Annealing",maxTime,0.5,maxTime+0.5);
     TH1D * h_N = new TH1D("N","Neff",maxTime,0.5,maxTime+0.5);
-    TH1D * h_U = new TH1D("U","V_dep",maxTime,0.5,periodeInDays*24.*60.*60.*maxTime+0.5);
+    TH1D * h_U = new TH1D("U","V_dep",maxTime,0.5,periodInDays*24.*60.*60.*maxTime+0.5);
     
     TGraph * lumigr = new TGraph(maxTime);
     TGraph * feqgr = new TGraph(maxTime);
@@ -451,11 +455,11 @@ void HamburgModelFactory::drawLumiTempScenario(){
     fout->cd();
     
     // fluence/temperature history
-    TH1D * h_Feq = new TH1D("h_Feq","Fluence",maxTime,0.5,periodeInDays*24.*60.*60.*maxTime+0.5);
-    TH1D * h_Feq_total = new TH1D("h_Feq_total","Total Fluence",maxTime,0.5,periodeInDays*24.*60.*60.*maxTime+0.5);
-    TH1D * h_DayLumi = new TH1D("h_DayLumi","Inst. Lumi per day",maxTime,0.5,periodeInDays*24.*60.*60.*maxTime+0.5);
-    TH1D * h_IntLumi = new TH1D("h_IntLumi","Integrated luminosity in fb^{-1}",maxTime,0.5,periodeInDays*24.*60.*60.*maxTime+0.5);
-    TH1D * h_T_base = new TH1D("h_T_base","Temperature set points", maxTime, 0.5, periodeInDays*24*60*60*maxTime+0.5);
+    TH1D * h_Feq = new TH1D("h_Feq","Fluence",maxTime,0.5,periodInDays*24.*60.*60.*maxTime+0.5);
+    TH1D * h_Feq_total = new TH1D("h_Feq_total","Total Fluence",maxTime,0.5,periodInDays*24.*60.*60.*maxTime+0.5);
+    TH1D * h_DayLumi = new TH1D("h_DayLumi","Inst. Lumi per day",maxTime,0.5,periodInDays*24.*60.*60.*maxTime+0.5);
+    TH1D * h_IntLumi = new TH1D("h_IntLumi","Integrated luminosity in fb^{-1}",maxTime,0.5,periodInDays*24.*60.*60.*maxTime+0.5);
+    TH1D * h_T_base = new TH1D("h_T_base","Temperature set points", maxTime, 0.5, periodInDays*24*60*60*maxTime+0.5);
     
     
     for(Int_t i = 0; i<Nperiods; i++){
@@ -517,6 +521,7 @@ void HamburgModelFactory::drawLumiTempScenario(){
 
 void HamburgModelFactory::runSimuForAllModules(int option=1){
     
+    std::cout << "Starting module life simulation" << std::endl;
     for (int idet = 0; idet< nentries; idet++) {
         
         tree->GetEntry(idet);
