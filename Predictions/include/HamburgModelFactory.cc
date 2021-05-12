@@ -7,7 +7,7 @@
 #include "TString.h"
 #include <fstream>
 #include <sstream>
-
+#include <vector>
 
 
 // set input tree reading
@@ -168,10 +168,8 @@ void HamburgModelFactory::simulateSensorEvolution(int detid_){
     
     // Ileak
     Double_t alpha1, alpha2, alpha3, delIleak;
-    Double_t Ileak=0;
     
-    
-    // vdep
+    // Vdep
     TF1 * fff = new TF1("fff","-0.00111/(x*x)+0.0586/x+0.240-0.651*x+0.355*x*x");
     Double_t w2p = 0.25;
     Double_t Ufd_diode = ini_vdep / (1.+2.*pitch/(d*100)*fff->Eval(w2p));
@@ -181,12 +179,16 @@ void HamburgModelFactory::simulateSensorEvolution(int detid_){
     Double_t Na_temp, NY_temp;
     Double_t temperature;
     
-    
-    
     Int_t counter=1;
     Float_t total_Lumi=0;
     Float_t total_Feq=0;
     
+    // Container for Ileak contributions from each previous time periods
+    std::vector< std::vector<double> > A1;
+    std::vector< std::vector<double> > A2;
+    std::vector< std::vector<double> > A3;
+    
+    // Loop over periods
     for(Int_t i = 0; i<Nperiods; i++){
         
         // integrated lumi
@@ -201,36 +203,107 @@ void HamburgModelFactory::simulateSensorEvolution(int detid_){
         // ILEAK
         
         alpha1 = a10;
-        alpha2 = I_a2(Temp_evol[i]);
+        alpha2 = I_a2(Temp_evol[i]); // Term with no annealing, use temperature in the time period
         alpha3 = I_a3(1,periodInDays);
+
+        // Annealing: consider a flash irradiation at beginning of the period
+        // Update leakage current in current and future periods
+        // Update consequent temperature increase
         
-        // annealing
-        // update leak current in future and consequent temperature increase
-        for(Int_t j=i; j<Nperiods; j++){  ///// DEPART DE I OU I+1 ???????????????????????
-            alpha1 *= I_a1(Temp_evol[j], periodInDays);
-            if(I_a2(Temp_evol[j])<alpha2) alpha2 = I_a2(Temp_evol[j]);  /// POURQUOI PAS UPDATE QUAND > alpha2 ????
-            alpha3 = I_a3(j-i+1, periodInDays);
-            delIleak = (alpha1+alpha2+alpha3)*Feq[i]*volume*1000;
-            
-            //std::cout<<" "<<j<<" "<<alpha1<<" "<<alpha2<<" "<<alpha3<<std::endl;
-            //std::cout<<" "<<j<<" "<<Feq[i]<<" "<<Temp_evol[j]<<" "<<delIleak<<std::endl;
-            
-            // if active: update the temperature for the increase due to the new leakage current increase
-            //  CAN IT BE DONE: ONLY AT THE END ???????????????????????????????????????????????
-            if(Active[j]){
-                temperature = Temp_evol[j];
-                int status = Ileak_Cavity(delIleak, temperature, dtdp, I_leak[j]);
-                if(!status) {
-                    std::cout<<"Limit with temp: "<<temperature<<" for period "<<j<<" "<<Lumi[j]<<" "<<total_Lumi<<" "<<Feq[j]<<" "<<Temp_evol[j]<<std::endl;
-                    I_leak[j] = -1;//-10
-                    break;
+        int TempAlgo = 1; // 1 from Christian
+        bool SelfHeating = true; // true in Christian's code
+        if(TempAlgo==1)
+        {
+            // Loop on current and next periods to compute contributions with annealing
+            for(Int_t j=i; j<Nperiods; j++){ /// Start from i : compute leakage current for the end of the period i
+                
+                alpha1 *= I_a1(Temp_evol[j], 1, periodInDays); /// *= is equivalent to add the additionnal time period in the exponential. Takes into account the temperature in the current time period (can be different than the one at the time of the irradiation)
+                
+                //use lowest value from current and previous periods
+                if(I_a2(Temp_evol[j])<alpha2) alpha2 = I_a2(Temp_evol[j]);  /// intercept (t=0) is temperature dependent ; can only decrease
+                    
+                alpha3 = I_a3(j-i+1, periodInDays);
+                delIleak = (alpha1+alpha2+alpha3)*Feq[i]*volume*1000;
+                
+                //std::cout<<" "<<j<<" "<<alpha1<<" "<<alpha2<<" "<<alpha3<<std::endl;
+                //std::cout<<" "<<j<<" "<<Feq[i]<<" "<<Temp_evol[j]<<" "<<delIleak<<std::endl;
+                
+                // if active: update the temperature for the increase due to the new leakage current increase (take only into account leakage current contributions already computed)
+                if(SelfHeating && Active[j]){
+                    temperature = Temp_evol[j];
+                    int status = Ileak_Cavity(delIleak, temperature, dtdp, I_leak[j]);
+                    if(!status) {
+                        std::cout<<"Limit with temp: "<<temperature<<" for period "<<j<<" "<<Lumi[j]<<" "<<total_Lumi<<" "<<Feq[j]<<" "<<Temp_evol[j]<<std::endl;
+                        I_leak[j] = -1;//-10
+                        break;
+                    }
+                    Temp_evol[j] = temperature; // update of the temperature due to the level of I_leak
                 }
-                Temp_evol[j] = temperature; // update of the temperature due to the level of I_leak
+                
+                I_leak[j]+=delIleak; //in mA per module
+                
+            }
+        }
+        else // Take into account summed Ileak for computing increased temperature
+        {
+            // Container preparation
+            A1.push_back( std::vector<double>(i+1, 0) );
+            A2.push_back( std::vector<double>(i+1, 0) );
+            A3.push_back( std::vector<double>(i+1, 0) );
+            
+            //  Current contribution:
+            Double_t I_a2_i = I_a2(Temp_evol[i]);
+            A1[i][0] = a10 * I_a1(Temp_evol[i], 1, periodInDays);
+            A2[i][0] = I_a2_i;
+            A3[i][0] = I_a3(1, periodInDays);
+             
+            // Loop on time previous periods to update their contribution with annealing (using current temperature)
+            // in A[i][j]  j=0 is current one, j=1 is previous one, ...
+            if(i>0)
+            for(Int_t j=1; j<=i; j++){
+                A1[i][j] = A1[i-1][j-1] * I_a1(Temp_evol[i], 1, periodInDays);
+                A2[i][j] = A2[i-1][j-1];
+                if(I_a2_i < A2[i][j]) A2[i][j] = I_a2_i;
+                A3[i][j] = I_a3(j+1, periodInDays);
             }
             
-            I_leak[j]+=delIleak; //in mA per module
-            
+            /*std::cout<<"A1 "<<std::endl;
+            for(Int_t j=0; j<=i; j++){
+                for(Int_t k=0; k<=j; k++) std::cout<<" "<<A1[j][k];
+                std::cout<<std::endl;
+            }*/
+
+            // Sum contributions from previous periods
+            alpha1=0;
+            alpha2=0;
+            alpha3=0;
+            for(Int_t j=0; j<=i; j++){
+                alpha1 += A1[i][j]*Feq[i-j]; // take into account fluence at that time
+                alpha2 += A2[i][j]*Feq[i-j];
+                alpha3 += A3[i][j]*Feq[i-j];
+            }
+            delIleak = (alpha1+alpha2+alpha3)*volume*1000;
+            //std::cout<<" "<<i<<" "<<alpha1<<" "<<alpha2<<" "<<alpha3<<" "<<delIleak<<std::endl;
+
+            // Update temperature
+            if(SelfHeating && Active[i]){
+                temperature = Temp_evol[i];
+                int status = Ileak_Cavity(delIleak, temperature, dtdp, 0);
+                if(!status) {
+                    std::cout<<"Limit with temp: "<<temperature<<" for period "<<i<<" "<<Lumi[i]<<" "<<total_Lumi<<" "<<Feq[i]<<" "<<Temp_evol[i]<<std::endl;
+                    I_leak[i] = -1;//-10
+                    break;
+                }
+                
+                // Update of the temperature due to the level of I_leak as it will be used for Vdep computation
+                // Not taken into account for I_leak annealing here !!
+                Temp_evol[i] = temperature;
+                
+            }
+
+            I_leak[i]+=delIleak; //in mA per module
         }
+            
         //std::cout<<i<<" "<<I_leak[i]<<std::endl;
         //if(!Active[i]) I_leak[i]=0;
         if(!SqrtS[i]) I_leak[i]=0;
@@ -288,6 +361,7 @@ void HamburgModelFactory::drawSaveSensorSimu(bool print_plots=false){
     
     for(Int_t i = 0; i<Nperiods; i++){
         
+        if(i<200) std::cout << i+1 <<" "<<Temp_evol[i]<<" "<<I_leak[i]<<std::endl;
         h_T->SetBinContent(i+1, Temp_evol[i]);
         h_I_leak->SetBinContent(i+1, I_leak[i]);
         h_I_leak_corr->SetBinContent(i+1,I_leak[i]*LeakCorrection(Temp_evol[i], ZeroC+20));
@@ -525,7 +599,8 @@ void HamburgModelFactory::runSimuForAllModules(int option=1){
     for (int idet = 0; idet< nentries; idet++) {
         
         tree->GetEntry(idet);
-        if(option==1) if(detid!=369120278 && detid!=369120378 && detid != 369121381 && detid != 369121385) continue;
+        //if(option==1) if(detid!=369120278 && detid!=369120378 && detid != 369121381 && detid != 369121385) continue;
+        if(option==1) if(detid!=369120378) continue;
         if(option==2) // modules from small scans
         if (detid != 369121381 && detid != 369121382 && detid != 369121385 && detid != 369121386 && detid != 369121389 && detid != 369121390 && // TIB L1
             detid != 369125861 && detid != 369125862 && detid != 369125865 && detid != 369125866 && detid != 369125869 && detid != 369125870 && //TIB L1
