@@ -24,6 +24,7 @@ class HamburgModelFactory {
         // files
         fin = 0;
         fout = new TFile("Graph_new.root", "recreate");
+        foutTree = 0;
     
         total_Lumi=0;
         total_Feq=0;
@@ -32,13 +33,15 @@ class HamburgModelFactory {
     ~HamburgModelFactory(){
         if(fin) fin->Close();
         if(fout) fout->Close();
+        if(foutTree) {foutTree->cd(); simutree->Write(); foutTree->Close();}
     };
 
     void setGlobalTree(std::string filename); // mandatory before calling runSimuForAllModules()
     void readLumiTempScenario(std::string filename);
-    void runSimuForAllModules(int option);
+    void runSimuForAllModules(int option, bool saveTree);
     void runSimuForAvgModules(bool drawNeff); // Idem, but for avg module per layer simu
     void drawLumiTempScenario(); // plots filled in runSimuForAllModules() and not in readLumiTempScenario()
+    void saveSensorSimuInTree(std::string filename);
 
     
   private:
@@ -104,6 +107,13 @@ class HamburgModelFactory {
     TFile* fout;
 
 
+    // for output tree writing
+    
+    TFile *foutTree;
+    TTree *simutree;
+    
+    Int_t iper;
+    Float_t flu_out, lumi_out, T_out, Ileak_out, Vdep_out;
     
 };
 

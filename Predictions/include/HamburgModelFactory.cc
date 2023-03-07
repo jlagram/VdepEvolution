@@ -83,8 +83,7 @@ void HamburgModelFactory::readLumiTempScenario(std::string filename="realistic_s
                     std::cout<<" ----------------------- "<<std::endl;
                     if(var=="StepInDays") periodInDays=step;
                 }
-                else std::cout<<line<<std::endl;
-                continue;
+                else continue;
             }
             StepInYear.push_back(stepInYear);
             SqrtS.push_back(sqrtS);
@@ -187,8 +186,13 @@ void HamburgModelFactory::simulateSensorEvolution(int detid_){
     std::vector< std::vector<double> > A1;
     std::vector< std::vector<double> > A2;
     std::vector< std::vector<double> > A3;
+
+    //----------------------
+    int TempAlgo = 1; // 1 from Christian
+    bool SelfHeating = true; // true in Christian's code
+    //----------------------
     
-    // Loop over periods
+    // Loop over periods for ILEAK
     for(Int_t i = 0; i<Nperiods; i++){
         
         // integrated lumi
@@ -199,9 +203,7 @@ void HamburgModelFactory::simulateSensorEvolution(int detid_){
         intFeq.push_back(total_Feq);
         
         //std::cout<<i<<" Feq: "<<Feq[i]<<" temp: "<<Temp_evol[i]<<std::endl;
-        
-        // ILEAK
-        
+
         alpha1 = a10;
         alpha2 = I_a2(Temp_evol[i]); // Term with no annealing, use temperature in the time period
         alpha3 = I_a3(1,periodInDays);
@@ -210,9 +212,7 @@ void HamburgModelFactory::simulateSensorEvolution(int detid_){
         // Update leakage current in current and future periods
         // Update consequent temperature increase
         
-        int TempAlgo = 1; // 1 from Christian
-        bool SelfHeating = true; // true in Christian's code
-        if(TempAlgo==1)
+        if(TempAlgo==1) // Christian's algorithm
         {
             // Loop on current and next periods to compute contributions with annealing
             for(Int_t j=i; j<Nperiods; j++){ /// Start from i : compute leakage current for the end of the period i
@@ -244,7 +244,7 @@ void HamburgModelFactory::simulateSensorEvolution(int detid_){
                 
             }
         }
-        else // Take into account summed Ileak for computing increased temperature
+        else // alternative algo. Take into account summed Ileak for computing increased temperature
         {
             // Container preparation
             A1.push_back( std::vector<double>(i+1, 0) );
@@ -295,8 +295,8 @@ void HamburgModelFactory::simulateSensorEvolution(int detid_){
                     break;
                 }
                 
-                // Update of the temperature due to the level of I_leak as it will be used for Vdep computation
-                // Not taken into account for I_leak annealing here !!
+                // Update of the temperature due to the level of I_leak
+                // Not taken into account for I_leak annealing here, but for Vdep below.
                 Temp_evol[i] = temperature;
                 
             }
@@ -307,10 +307,13 @@ void HamburgModelFactory::simulateSensorEvolution(int detid_){
         //std::cout<<i<<" "<<I_leak[i]<<std::endl;
         //if(!Active[i]) I_leak[i]=0;
         if(!SqrtS[i]) I_leak[i]=0;
+    } //end loop over periods ILEAK
+    
         
-        // VDEP
-        
-        Nc[i] = -N_stable(Neff0, total_Feq);
+    // Loop over periods for VDEP
+    for(Int_t i = 0; i<Nperiods; i++){
+            
+        Nc[i] = -N_stable(Neff0, intFeq[i]);
         Na_temp = ga * Feq[i];
         NY_temp = 1;
         // annealing
@@ -322,13 +325,13 @@ void HamburgModelFactory::simulateSensorEvolution(int detid_){
         }
         //std::cout<<i<<" "<<Neff0<<" "<<Nc[i]<<" "<<Na[i]<<" "<<NY[i]<<std::endl;
         //std::cout<<i<<" "<<Nc[i]<<" "<<Na[i]<<" "<<NY[i]<<std::endl;
-    }
-    
-    // filling Neff and full depletion voltage
-    for(Int_t i = 0; i<Nperiods; i++){
+        
+        // filling Neff and full depletion voltage
         N[i] = Neff0 + Nc[i] + Na[i] + NY[i];
         U[i] = (1. + 2.*pitch/(d*100)*fff->Eval(w2p))*fabs(N[i])*(d*d*10000)*q_el/ (2. * eps * eps0);
-    }
+        
+    } //end loop over periods VDEP
+    
     std::cout << " total Feq " << total_Feq << std::endl;
 
 }
@@ -347,21 +350,21 @@ void HamburgModelFactory::drawSaveSensorSimu(bool print_plots=false){
     // Module temperature & Ileak
     TH1D * h_T = new TH1D("h_T","Module Temperature",maxTime,0.5, maxTime+0.5);
     TH1D * h_I_leak = new TH1D("I_leak","Leakage Current (not corrected)", maxTime,0.5, maxTime+0.5);
-    TH1D * h_I_leak_corr = new TH1D("I_leak_corr","Leakage Current", maxTime,0.5, periodInDays*24.*60.*60.*maxTime+0.5);
+    TH1D * h_I_leak_corr = new TH1D("I_leak_corr","Leakage Current", maxTime,0., periodInDays*24.*60.*60.*maxTime);
     
     // Vdep related plots
     TH1D * h_Nc = new TH1D("Nc","Stable Damage",maxTime,0.5,maxTime+0.5);
     TH1D * h_Na = new TH1D("Na","Short Term Annealing",maxTime,0.5,maxTime+0.5);
     TH1D * h_NY = new TH1D("NY","Reverse Annealing",maxTime,0.5,maxTime+0.5);
     TH1D * h_N = new TH1D("N","Neff",maxTime,0.5,maxTime+0.5);
-    TH1D * h_U = new TH1D("U","V_dep",maxTime,0.5,periodInDays*24.*60.*60.*maxTime+0.5);
+    TH1D * h_U = new TH1D("U","V_dep",maxTime,0.,periodInDays*24.*60.*60.*maxTime);
     
     TGraph * lumigr = new TGraph(maxTime);
     TGraph * feqgr = new TGraph(maxTime);
     
     for(Int_t i = 0; i<Nperiods; i++){
         
-        if(i<200) std::cout << i+1 <<" "<<Temp_evol[i]<<" "<<I_leak[i]<<std::endl;
+        //if(i>200) std::cout << i+1 <<" "<<Temp_evol[i]<<" "<<I_leak[i]<<std::endl;
         h_T->SetBinContent(i+1, Temp_evol[i]);
         h_I_leak->SetBinContent(i+1, I_leak[i]);
         h_I_leak_corr->SetBinContent(i+1,I_leak[i]*LeakCorrection(Temp_evol[i], ZeroC+20));
@@ -393,7 +396,7 @@ void HamburgModelFactory::drawSaveSensorSimu(bool print_plots=false){
          title.Form("Temperature (%s, DETID: %i)", pg, detid);
          h_T_years->SetTitle(title);
          h_T_years->GetXaxis()->SetTimeDisplay(1);
-         h_T_years->GetXaxis()->SetTimeFormat("%d\/%m\/%y%F2010-01-01 13:00:00");
+         h_T_years->GetXaxis()->SetTimeFormat("%d\/%m\/%y%F2010-01-01 00:00:00");
          h_T_years->GetXaxis()->SetTitle("Time");
          h_T_years->GetYaxis()->SetTitle("Temperature (#circC)");
          h_T_years->GetYaxis()->SetTitleOffset(1.2);
@@ -420,7 +423,7 @@ void HamburgModelFactory::drawSaveSensorSimu(bool print_plots=false){
         title.Form("Corrected leakage current (%s, DETID: %i)", pg, detid);
         h_I_leak_corr->SetTitle(title);
         h_I_leak_corr->GetXaxis()->SetTimeDisplay(1);
-        h_I_leak_corr->GetXaxis()->SetTimeFormat("%d\/%m\/%y%F2010-01-01 13:00:00");
+        h_I_leak_corr->GetXaxis()->SetTimeFormat("%d\/%m\/%y%F2010-01-01 00:00:00");
         h_I_leak_corr->GetXaxis()->SetTitle("Time");
         h_I_leak_corr->GetYaxis()->SetTitle("Leakage current (mA)");
         h_I_leak_corr->DrawCopy();
@@ -435,7 +438,7 @@ void HamburgModelFactory::drawSaveSensorSimu(bool print_plots=false){
         title.Form("Full depletion voltage (%s, DETID: %i)", pg, detid);
         h_U->SetTitle(title);
         h_U->GetXaxis()->SetTimeDisplay(1);
-        h_U->GetXaxis()->SetTimeFormat("%d\/%m\/%y%F2010-01-01 13:00:00");
+        h_U->GetXaxis()->SetTimeFormat("%d\/%m\/%y%F2010-01-01 00:00:00");
         h_U->GetXaxis()->SetTitle("Time");
         h_U->GetYaxis()->SetTitle("Full depletion voltage (V)");
         h_U->DrawCopy();
@@ -450,7 +453,7 @@ void HamburgModelFactory::drawSaveSensorSimu(bool print_plots=false){
         title.Form("Effective space charge (%s, DETID: %i)", pg, detid);
         h_N->SetTitle(title);
         //	h_N->GetXaxis()->SetTimeDisplay(1);
-        //	h_N->GetXaxis()->SetTimeFormat("%d\/%m\/%y%F2010-01-01 13:00:00");
+        //	h_N->GetXaxis()->SetTimeFormat("%d\/%m\/%y%F2010-01-01 00:00:00");
         h_N->GetXaxis()->SetTitle("Time (steps)");
         h_N->GetYaxis()->SetTitle("Effective space charge (cm-3)");
         h_N->DrawCopy();
@@ -476,7 +479,7 @@ void HamburgModelFactory::drawSaveSensorSimu(bool print_plots=false){
         title.Form("Effective space charge contributions (%s, DETID: %i)", pg, detid);
         h_N->SetTitle(title);
         //	h_N-dGetXaxis()->SetTimeDisplay(1);
-        //	h_N->GetXaxis()->SetTimeFormat("%d\/%m\/%y%F2010-01-01 13:00:00");
+        //	h_N->GetXaxis()->SetTimeFormat("%d\/%m\/%y%F2010-01-01 00:00:00");
         h_N->GetXaxis()->SetTitle("Time (steps)");
         h_N->GetYaxis()->SetTitle("Effective space charge (cm-3)");
         h_N->DrawCopy();
@@ -551,7 +554,7 @@ void HamburgModelFactory::drawLumiTempScenario(){
     //	  h_Feq_total->SetTitle(title);
     h_Feq_total->SetName("intFeq");
     h_Feq_total->GetXaxis()->SetTimeDisplay(1);
-    h_Feq_total->GetXaxis()->SetTimeFormat("%d\/%m\/%y%F2010-01-01 13:00:00");
+    h_Feq_total->GetXaxis()->SetTimeFormat("%d\/%m\/%y%F2010-01-01 00:00:00");
     h_Feq_total->GetXaxis()->SetTitle("Time");
     h_Feq_total->GetYaxis()->SetTitle("Fluence (1MeV neq/cm^{-2})");
     h_Feq_total->DrawCopy();
@@ -564,7 +567,7 @@ void HamburgModelFactory::drawLumiTempScenario(){
     //	  h_Feq_total->SetTitle(title);
     h_IntLumi->SetName("intLumi");
     h_IntLumi->GetXaxis()->SetTimeDisplay(1);
-    h_IntLumi->GetXaxis()->SetTimeFormat("%d\/%m\/%y%F2010-01-01 13:00:00");
+    h_IntLumi->GetXaxis()->SetTimeFormat("%d\/%m\/%y%F2010-01-01 00:00:00");
     h_IntLumi->GetXaxis()->SetTitle("Time");
     h_IntLumi->GetYaxis()->SetTitle("Int. luminosity (fb^{-1})");
     h_IntLumi->GetYaxis()->SetTitleOffset(1.2);
@@ -579,7 +582,7 @@ void HamburgModelFactory::drawLumiTempScenario(){
     h_T_base->SetTitle(title);
     h_T_base->SetName("Temp");
     h_T_base->GetXaxis()->SetTimeDisplay(1);
-    h_T_base->GetXaxis()->SetTimeFormat("%d\/%m\/%y%F2010-01-01 13:00:00");
+    h_T_base->GetXaxis()->SetTimeFormat("%d\/%m\/%y%F2010-01-01 00:00:00");
     h_T_base->GetXaxis()->SetTitle("Time");
     h_T_base->GetYaxis()->SetTitle("Temperature (#circC)");
     h_T_base->DrawCopy();
@@ -589,18 +592,53 @@ void HamburgModelFactory::drawLumiTempScenario(){
 }
 
 
+// Save results in a tree
+//------------------------
+
+void HamburgModelFactory::saveSensorSimuInTree(std::string filename="SimuTree.root"){
+
+    if(!foutTree) {
+        foutTree = new TFile(filename.c_str() ,"recreate");
+        simutree = new TTree("simutree", "");
+        
+        simutree->Branch("detid", &detid, "detid/I");
+        simutree->Branch("period", &iper, "period/I");
+        simutree->Branch("fluence", &flu_out, "fluence/F");
+        simutree->Branch("lumi", &lumi_out, "lumi/F");
+        simutree->Branch("T", &T_out, "T/F");
+        simutree->Branch("Ileak", &Ileak_out, "Ileak/F");
+        simutree->Branch("Vdep", &Vdep_out, "Vdep/F");
+    }
+    
+    foutTree->cd();
+
+    for(Int_t i = 0; i<Nperiods; i++){
+        flu_out = intFeq[i];
+        lumi_out = intLumi[i];
+        T_out = Temp_evol[i];
+        Ileak_out = I_leak[i]*LeakCorrection(Temp_evol[i], ZeroC+20);
+        Vdep_out = U[i];
+        iper = i+1;
+        simutree->Fill();
+    }
+}
+
+
 
 // Loop over modules
 //------------------
 
-void HamburgModelFactory::runSimuForAllModules(int option=1){
+void HamburgModelFactory::runSimuForAllModules(int option=1, bool saveTree=false){
     
     std::cout << "Starting module life simulation" << std::endl;
+    std::cout << "Option " << option << std::endl;
+    //for (int idet = 0; idet< 1; idet++) {
     for (int idet = 0; idet< nentries; idet++) {
-        
+
         tree->GetEntry(idet);
-        //if(option==1) if(detid!=369120278 && detid!=369120378 && detid != 369121381 && detid != 369121385) continue;
-        if(option==1) if(detid!=369120378) continue;
+        if(option==0) std::cout << "Looping over all modules" << option << std::endl; // all modules
+        if(option==1) // set of test modules
+            if(detid!=369120278 && detid!=369120378 && detid != 369121381 && detid != 369121385) continue;
         if(option==2) // modules from small scans
         if (detid != 369121381 && detid != 369121382 && detid != 369121385 && detid != 369121386 && detid != 369121389 && detid != 369121390 && // TIB L1
             detid != 369125861 && detid != 369125862 && detid != 369125865 && detid != 369125866 && detid != 369125869 && detid != 369125870 && //TIB L1
@@ -613,12 +651,19 @@ void HamburgModelFactory::runSimuForAllModules(int option=1){
             // and (detid != 369121385) and (detid != 369138014) and (detid != 369158500 ) and (detid != 369175324) and (detid != 436229362)
             && detid!=369120278 && detid!=369120378
             ) continue;
+        if(option==3) // 1% random modules
+            if(idet%100!=0) continue;
+        if(option==4) // random hot modules
+            if(temp<20 || idet%10!=0) continue;
+
         std::cout << " doing calculations for detid " << detid << std::endl;
         std::cout << "   fluence: " <<fluence_7000TeV<< " Ton: "<<temp<<" ini_leak: "<<ini_leak<<" ini_vdep: "<<ini_vdep<< std::endl;
         
         simulateSensorEvolution(detid);
         if(detid==369120278 || detid==369120378 || detid == 369121381 || detid == 369121385  || detid == 369125870) drawSaveSensorSimu(true);
         else drawSaveSensorSimu(false);
+        
+        if(saveTree) saveSensorSimuInTree();
         
     }
 }
