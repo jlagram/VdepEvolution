@@ -13,14 +13,16 @@ const double eps = 11.9;
 const double ga = 1.81E-2;  // cm-1 //TDR p96 : 1.54e-2  //dierl : 1.81e-2
 const double gY = 5.16E-2;  // cm-1 //        : 4.6e-2   //     :5.16e-2
 
-const double a10 =  1.23e-17; // A/cm
 const double _dI_cut = 0.00001; // 0.000000001
 
-double I_a1(double T, int days)
+const double a10 =  1.23e-17; // A/cm
+
+
+double I_a1(double T, double t, int days)
 {
     double k0 = 1.2e13; // 1/s
     double E = 1.11; // eV
-    double invt =  k0 * TMath::Exp(-E/(k_B*T)) * 60 * 60 * 24 * days; // 1/day
+    double invt =  k0 * TMath::Exp(-E/(k_B*T)) * 60 * 60 * 24 * days * t;
     return TMath::Exp(- invt);
 }
 
@@ -32,7 +34,7 @@ double I_a2(double T)
 double I_a3(double t, int days)
 {
     double b = 3.07e-18; //A/cm
-    return -b * TMath::Log(t*days*24*60);
+    return -b * TMath::Log(t*days*24*60); // with t0=1min
 }
 
 double LeakCorrection(double T1, double T2)
@@ -88,8 +90,8 @@ int Ileak_Cavity(double dIleak, double &temp, Float_t dtdp, double abs_Ileak){
         dI = LeakCorrection(new_temp,temp)*(abs_Ileak_atT)-abs_Ileak_atT;
         temp=new_temp;
         abs_Ileak_atT = LeakCorrection(temp,293.16)*(abs_Ileak+dIleak);
-        if(  abs_Ileak_atT >12 ) {
-            std::cout << " Current limit reached!!! "<< std::endl;
+        if(  abs_Ileak_atT >12 ) {//12
+            std::cout << " Current limit reached!!! "<< abs_Ileak_atT <<"mA"<< std::endl;
             return 0;//0 //JLA
         }
     }

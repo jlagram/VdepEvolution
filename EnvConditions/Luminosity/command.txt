@@ -1,0 +1,1 @@
+brilcalc lumi -c web --begin "01/01/15 00:00:00" --end "12/31/15 23:59:59" > lumi_brilcalc_2015.txt

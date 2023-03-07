@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 from array import array
 import os,sys,fnmatch
@@ -9,31 +9,31 @@ from datetime import timedelta
 from numpy import median
 
 #Simulation start and end dates:
-startYear,startMonth,startDay = 2013,1,1
-endYear,endMonth,endDay = 2013,12,31
+startYear,startMonth,startDay = 2022,1,1
+endYear,endMonth,endDay = 2022,12,31
 
 startDate=datetime(startYear,startMonth,startDay, 1)
 endDate=datetime(endYear,endMonth,endDay,1)
 
-print "START TIME:", startDate.strftime('%d/%m/%y')
-print "END TIME:", endDate.strftime('%d/%m/%y')
-print "       time ranging over", endDate.toordinal()-startDate.toordinal()+1, "days"
+print("START TIME:", startDate.strftime('%d/%m/%y'))
+print("END TIME:", endDate.strftime('%d/%m/%y'))
+print("       time ranging over", endDate.toordinal()-startDate.toordinal()+1, "days")
 
 #Reading PLC readings
 fPLC_TSil={}
 PLClines_TSil={}
-print "READING TSIL FILES ..."
-fPLC_TSil[1] = open('./Data/TIB_minus_1.1.1_TLIQ1_2009-2020.csv', 'rU')
-fPLC_TSil[2] = open('./Data/TIB_minus_1.1.1_TLIQ2_2009-2020.csv', 'rU')
-fPLC_TSil[3] = open('./Data/TOB_plus_1.1.1.2_TLIQ_2009-2020-modif.csv', 'rU')
-fPLC_TSil[4] = open('./Data/TOB_plus_1.1.1.3_TLIQ_2009-2020.csv', 'rU')
+print("READING TSIL FILES ...")
+fPLC_TSil[1] = open('./Data/TIB_minus_1.1.1_TLIQ1_2009-2022.csv', 'r')
+fPLC_TSil[2] = open('./Data/TIB_minus_1.1.1_TLIQ2_2009-2022.csv', 'r')
+fPLC_TSil[3] = open('./Data/TOB_plus_1.1.1.2_TLIQ_2009-2022-modif.csv', 'r')
+fPLC_TSil[4] = open('./Data/TOB_plus_1.1.1.3_TLIQ_2009-2022.csv', 'r')
 
 
 for file in fPLC_TSil.keys():
     PLClines_TSil[file] = fPLC_TSil[file].readlines()
     fPLC_TSil[file].close()
 
-print "APPENDING TSIL READINGS FOR EACH DAY ..."
+print("APPENDING TSIL READINGS FOR EACH DAY ...")
 datesTempForGraph = []
 PLCtempsTSilForGraph = {}
 PLCtemptimesTSilForGraph = {}
@@ -52,12 +52,12 @@ for file in PLClines_TSil.keys():
         #if file==1: print date, data[3].strip()
         PLCtempsTSilForGraph[file].append(float(data[3].strip()))
         PLCtemptimesTSilForGraph[file].append(date)
-print "       found temperature information for", len(datesTempForGraph), "days"
+print("       found temperature information for", len(datesTempForGraph), "days")
 
 c = TCanvas("c","",1200,400)
 graphs = {}
 graph_avg = TGraph()
-tref = datetime(1970, 01, 01)
+tref = datetime(1970, 1, 1)
 for file in PLClines_TSil.keys():
     graphs[file] = TGraph()
     ipt=0
@@ -91,7 +91,7 @@ while(iterDate<=endDate):
         PLCtemptimesTSil[dates[-1]][file] = []
     iterDate += timedelta(days=1)
 
-print "APPENDING TSIL READINGS FOR EACH DAY ..."
+print("APPENDING TSIL READINGS FOR EACH DAY ...")
 datesTemp = []
 for file in PLClines_TSil.keys():
     for line in PLClines_TSil[file]: #append TSil readings for each day to average them later
@@ -104,10 +104,10 @@ for file in PLClines_TSil.keys():
         datesTemp.append(date)
         PLCtempsTSil[date][file].append(float(data[3].strip()))
         PLCtemptimesTSil[date][file].append(int(data[1].strip()[:-3]))
-print "       found temperature information for", len(datesTemp), "days"
+print("       found temperature information for", len(datesTemp), "days")
 
 
-print "AVERAGING TEMPERATURE OVER DAY ..."
+print("AVERAGING TEMPERATURE OVER DAY ...")
 for i in range(len(dates)):
     date = dates[i]
     avgTempTSil = {}
@@ -122,18 +122,18 @@ for i in range(len(dates)):
                     counterTSil[file]+=1
         if counterTSil[file]!=0: TrackerSDTempAvgTSil[date][file]=avgTempTSil[file]/counterTSil[file]
         else:
-            day = datetime(date/10000+2000, (date%10000)/100, date%100, 1)
+            day = datetime(int(date/10000+2000), int((date%10000)/100), int(date%100), 1)
             dayBefore = day - timedelta(days=1)
             try: TrackerSDTempAvgTSil[date][file]=TrackerSDTempAvgTSil[int(dayBefore.strftime('%y%m%d'))][file]
             except: TrackerSDTempAvgTSil[date][file]=13
-print "       interpolated/averaged temperature information for", len(TrackerSDTempAvgTSil), "days"
+print("       interpolated/averaged temperature information for", len(TrackerSDTempAvgTSil), "days")
 
 
-print "AVERAGING TEMPERATURE OVER FILES ..."
+print("AVERAGING TEMPERATURE OVER FILES ...")
 ipt=0
 for i in range(len(dates)):
         today  = dates[i]
-        today_date = datetime(today/10000+2000, (today%10000)/100, today%100, 1)
+        today_date = datetime(int(today/10000+2000), int((today%10000)/100), int(today%100), 1)
         year=today/10000+2000
         tempnow=0.
         values = []
@@ -153,9 +153,9 @@ for i in range(len(dates)):
                 tempmedian = median(values)
                     
                 if tempdiff<-2 or tempdiff>2 :
-                    print ' Temperature difference '+str(today)+' '+str(tempdiff)+' '+str(tempmedian)
-                    for file in PLClines_TSil.keys(): print TrackerSDTempAvgTSil[today][file]
-                    print '  median:', tempmedian
+                    print(' Temperature difference '+str(today)+' '+str(tempdiff)+' '+str(tempmedian))
+                    for file in PLClines_TSil.keys(): print( TrackerSDTempAvgTSil[today][file])
+                    print('  median:', tempmedian)
                     tempnow=tempmedian
                 else:
                     tempnow=tempavg
@@ -177,7 +177,7 @@ for file in PLClines_TSil.keys():
         graphs[file].GetXaxis().SetTimeFormat("%F1970-01-01 00:00:00")
     else:
         graphs[file].Draw('PL')
-        print file, graphs[file].GetMarkerColor()
+        print(file, graphs[file].GetMarkerColor())
 graph_avg.SetMarkerStyle(20)
 graph_avg.SetMarkerSize(0.5)
 graph_avg.SetMarkerColor(6)
@@ -187,7 +187,7 @@ graph_avg.Draw('PL')
 c.Print('temp_history.png')
 
 for file in fPLC_TSil.keys():
-    print file
+    print(file)
 
 
 

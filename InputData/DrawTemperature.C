@@ -151,6 +151,32 @@ bool IsInternal(ULong64_t modid)
     
 }
 
+void WriteTemperatureMap(std::string outputfilename)
+{
+    ofstream output;
+    output.open(outputfilename);
+    
+    TFile *fin = TFile::Open("BasicFiles/TempTree.root");
+    if(!fin){
+        std::cerr<<"Could not open temperature tree"<<std::endl;
+        return 0;
+    }
+    TTree *treetemp = (TTree*)fin->Get("treetemp");
+    Int_t detid;
+    Float_t temp;
+    treetemp->SetBranchAddress("DETID",&detid);
+    treetemp->SetBranchAddress("Temp",&temp);
+    Long64_t tempentries = treetemp->GetEntries();
+    
+    // Loop on detids
+    for(Int_t j = 0; j< tempentries; j++){
+        treetemp->GetEntry(j);
+        output << detid << " " << temp << endl;
+    }
+    fin->Close();
+    output.close();
+}
+
 TH1F* DrawLayerTemperature(std::string subdet="TIB", int layer=0, bool show=false, bool filter_hotregion=false)
 {
     
@@ -291,4 +317,5 @@ void DrawTemperature()
     ShowHotRegionsRemoval("TIB", 2);
     ShowHotRegionsRemoval("TIB", 3);
     ShowHotRegionsRemoval("TOB", 3);
+    WriteTemperatureMap("initial_temperature_map.txt");
 }

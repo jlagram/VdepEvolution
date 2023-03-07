@@ -16,8 +16,9 @@ int main(){
 
     HamburgModelFactory factory;
     factory.setGlobalTree("Inputs/GlobalTree.root");
-    factory.readLumiTempScenario("Inputs/realistic_scenario_2020.txt");
-    factory.runSimuForAllModules(1);
-    factory.drawLumiTempScenario();
-    
+    factory.readLumiTempScenario("Inputs/realistic_scenario_2022.txt");
+    //factory.readLumiTempScenario("Inputs/test_scenario.txt");
+    //factory.runSimuForAllModules(1);
+    factory.runSimuForAllModules(2, true);
+    factory.drawLumiTempScenario();    
 }

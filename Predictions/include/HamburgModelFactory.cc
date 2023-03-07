@@ -125,10 +125,11 @@ void HamburgModelFactory::simulateSensorEvolution(int detid_){
     // clear and initialize containers
     for (Int_t i = 0; i< Nperiods; i++) {
         // fluence
-        Feq[i] = fluence_3500TeV * 7.35e13 * Lumi[i];
+        if(SqrtS[i]-0.9<0.01) Feq[i] = fluence_3500TeV * 5.3e13 * Lumi[i]; // https://cds.cern.ch/record/2800515/files/pos.ICRC2019.207.pdf
+        if(SqrtS[i]==7) Feq[i] = fluence_3500TeV * 7.35e13 * Lumi[i];
         //if(SqrtS[i]==13) Feq[i] *= 8.0/7.35; // scaling factor between 7TeV and 13TeV pp cross section
         if(SqrtS[i]==8) Feq[i] = fluence_3500TeV * 7.47e13 * Lumi[i];
-        if(SqrtS[i]==13) Feq[i] = fluence_7000TeV * 8.0e13 * Lumi[i];
+        if(SqrtS[i]==13 || SqrtS[i]-13.6<0.01) Feq[i] = fluence_7000TeV * 8.0e13 * Lumi[i];
         // temperature
         Temp_evol[i] = ZeroC + Temp[i];
         if(Active[i]) Temp_evol[i] += temp-4; // temp: from temperature mapping from Run1

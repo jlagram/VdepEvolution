@@ -1,6 +1,8 @@
 # Code for predicting full depletion voltage evolution
 
-Precise input files names in `ComputeVdepEvolution.C` before compiling and executing.
+This code aims at predicting the full depletion voltage evolution with radiations and time. The leakage current evolution is also computed here but only for predicting temperature evolution. A more fine temperature and fluence history would be needed for a precise prediction of the leakage current.
+
+Precise input files names and options in `ComputeVdepEvolution.C` before compiling and executing.
 
 ## include
 
