@@ -2,15 +2,15 @@
 
 from array import array
 import os,sys,fnmatch
-from ROOT import *
+from ROOT import TCanvas, TGraph
 import time
 from datetime import datetime
 from datetime import timedelta
 from numpy import median
 
 #Simulation start and end dates:
-startYear,startMonth,startDay = 2022,1,1
-endYear,endMonth,endDay = 2022,12,31
+startYear,startMonth,startDay = 2023,1,1
+endYear,endMonth,endDay = 2023,12,31
 
 startDate=datetime(startYear,startMonth,startDay, 1)
 endDate=datetime(endYear,endMonth,endDay,1)
@@ -23,10 +23,10 @@ print("       time ranging over", endDate.toordinal()-startDate.toordinal()+1, "
 fPLC_TSil={}
 PLClines_TSil={}
 print("READING TSIL FILES ...")
-fPLC_TSil[1] = open('./Data/TIB_minus_1.1.1_TLIQ1_2009-2022.csv', 'r')
-fPLC_TSil[2] = open('./Data/TIB_minus_1.1.1_TLIQ2_2009-2022.csv', 'r')
-fPLC_TSil[3] = open('./Data/TOB_plus_1.1.1.2_TLIQ_2009-2022-modif.csv', 'r')
-fPLC_TSil[4] = open('./Data/TOB_plus_1.1.1.3_TLIQ_2009-2022.csv', 'r')
+fPLC_TSil[1] = open('./Data/TIB_minus_1.1.1_TLIQ1_2023.csv', 'r')
+fPLC_TSil[2] = open('./Data/TIB_minus_1.1.1_TLIQ2_2023.csv', 'r')
+fPLC_TSil[3] = open('./Data/TOB_plus_1.1.1.2_TLIQ_2023.csv', 'r')
+fPLC_TSil[4] = open('./Data/TOB_plus_1.1.1.3_TLIQ_2023.csv', 'r')
 
 
 for file in fPLC_TSil.keys():
@@ -163,8 +163,18 @@ for i in range(len(dates)):
                     if abs(tempnow-4)<2.: tempnow=4
                 if year>=2015 and year <=2017:
                     if abs(tempnow+15)<1.5: tempnow=-15
-                if year>=2018:
+                if year>=2018 and year <=2022:
                     if abs(tempnow+20)<1.5: tempnow=-20
+                if year==2023:
+                    if today<230610:
+                        if abs(tempnow+20)<1.5: tempnow=-20
+                    else:
+                        if abs(tempnow+22)<1.5: tempnow=-22
+                if year>=2024:
+                    if today<240609:
+                        if abs(tempnow+22)<1.5: tempnow=-22
+                    else:
+                        if abs(tempnow+25)<1.5: tempnow=-25
                 graph_avg.SetPoint(ipt ,(today_date.toordinal()-tref.toordinal())*86400, tempnow)
                 #print ipt, today, tempnow
                 ipt+=1

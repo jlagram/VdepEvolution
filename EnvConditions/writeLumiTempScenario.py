@@ -2,27 +2,34 @@
 
 from array import array
 import os,sys,fnmatch
-from ROOT import *
+from ROOT import TCanvas, TGraph
 import time
 from datetime import datetime
 from datetime import timedelta
 from numpy import median
 
 
-def tempInYear(year):
+def tempInYear(year_int, today):
     if year_int>=2010 and year_int <=2013:
         return 4
     if year_int>=2015 and year_int <=2017:
         return -15
-    if year_int>=2018:
+    if year_int>=2018 and year_int <=2022:
         return -20
+    if year_int==2023:
+        if today<230610: return -20
+        else: return -22
+    if year_int>=2024:
+        if today<240609: return -22
+        else: return -25
+   
     return -99
 
 ##############################################################################
 
 #Simulation start and end dates:
-startYear,startMonth,startDay = 2010,3,30#2010,3,30
-endYear,endMonth,endDay = 2022,12,31
+startYear,startMonth,startDay = 2023,1,1#2010,3,30
+endYear,endMonth,endDay = 2024,12,31
 
 ###############################################################################
 
@@ -82,10 +89,10 @@ print("       found lumi information for", len(datesLumi), "days")
 fPLC_TSil={}
 PLClines_TSil={}
 print("READING TSIL FILES ...")
-fPLC_TSil[1] = open('./Temperature/Data/TIB_minus_1.1.1_TLIQ1_2009-2022.csv', 'r')
-fPLC_TSil[2] = open('./Temperature/Data/TIB_minus_1.1.1_TLIQ2_2009-2022.csv', 'r')
-fPLC_TSil[3] = open('./Temperature/Data/TOB_plus_1.1.1.2_TLIQ_2009-2022-modif.csv', 'r')
-fPLC_TSil[4] = open('./Temperature/Data/TOB_plus_1.1.1.3_TLIQ_2009-2022.csv', 'r')
+fPLC_TSil[1] = open('./Temperature/Data/TIB_minus_1.1.1_TLIQ1_2009-2024.csv', 'r')
+fPLC_TSil[2] = open('./Temperature/Data/TIB_minus_1.1.1_TLIQ2_2009-2024.csv', 'r')
+fPLC_TSil[3] = open('./Temperature/Data/TOB_plus_1.1.1.2_TLIQ_2009-2024.csv', 'r')
+fPLC_TSil[4] = open('./Temperature/Data/TOB_plus_1.1.1.3_TLIQ_2009-2024.csv', 'r')
 for file in fPLC_TSil.keys():
     PLClines_TSil[file] = fPLC_TSil[file].readlines()
     fPLC_TSil[file].close()
@@ -150,7 +157,7 @@ print("       interpolated/averaged temperature information for", len(TrackerSDT
 
 
 # Collision energy
-sqrts = {'2010':7, '2011':7, '2012':8, '2013':2.6 ,'2014':0, '2015':13 ,'2016':13, '2017':13, '2018':13, '2019':0, '2020':0, '2021':0.9, '2022A':0.9, '2022':13.6}
+sqrts = {'2010':7, '2011':7, '2012':8, '2013':2.6 ,'2014':0, '2015':13 ,'2016':13, '2017':13, '2018':13, '2019':0, '2020':0, '2021':0.9, '2022A':0.9, '2022':13.6, '2023':13.6, '2024':13.6}
 
 
 c = TCanvas("c","",1200,400)
@@ -208,12 +215,23 @@ with open('LumiPerDay.txt','w') as fout:
                     tempnow=tempmedian
                 else:
                     tempnow=tempavg
+                
                 if year_int>=2010 and year_int <=2012:
                     if abs(tempnow-4)<2.: tempnow=4
                 if year_int>=2015 and year_int <=2017:
                     if abs(tempnow+15)<1.5: tempnow=-15
-                if year_int>=2018:
+                if year_int>=2018 and year_int <=2022:
                     if abs(tempnow+20)<1.5: tempnow=-20
+                if year_int==2023:
+                    if today<230610:
+                        if abs(tempnow+20)<1.5: tempnow=-20
+                    else:
+                        if abs(tempnow+22)<1.5: tempnow=-22
+                if year_int>=2024:
+                    if today<240609:
+                        if abs(tempnow+22)<1.5: tempnow=-22
+                    else:
+                        if abs(tempnow+25)<1.5: tempnow=-25
     
         sqrtsnow=0
         if luminow!=0:
@@ -229,10 +247,10 @@ with open('LumiPerDay.txt','w') as fout:
                 HVnow = 1
                 
         # modification when collisions but high temperature
-        if luminow>0 and tempnow>tempInYear(year)+5:
+        if luminow>0 and tempnow>tempInYear(year_int, today)+5:
             print('WARNING : replacing high temperature during collision in day, ', today, ': {:.1f}'.format(tempnow), 'oC - ', luminow, 'nb-1')
-            tempnow = tempInYear(year)
-            graph_repl.SetPoint(ipt, iday*86400, tempInYear(year))
+            tempnow = tempInYear(year_int, today)
+            graph_repl.SetPoint(ipt, iday*86400, tempInYear(year_int, today))
             ipt+=1
             
         # modification when detector on but at room temperature from 2022 (large values of leakage current)

@@ -6,3 +6,14 @@ In 2022 files, had to add line:
 "1655290800000","-10.5"
 because temperature was increased at end of the day and no more measurement in the next days.
 
+In 2023 files, had to add lines:
+April
+"1682679600000","-19"
+June
+"1686740400000","-11"
+July
+"1690542000000","-0.5"
+September
+"1695466800000","-21"
+November
+"1699786800000","-0.5"
